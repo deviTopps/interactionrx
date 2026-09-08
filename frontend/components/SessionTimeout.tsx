@@ -10,8 +10,8 @@ export default function SessionTimeout() {
   const { session, signOut } = useAuth();
   const [showWarning, setShowWarning] = useState(false);
   const lastActivity = useRef(Date.now());
-  const warningTimer = useRef<ReturnType<typeof setTimeout>>();
-  const logoutTimer = useRef<ReturnType<typeof setTimeout>>();
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const logoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const resetTimers = () => {
     lastActivity.current = Date.now();
