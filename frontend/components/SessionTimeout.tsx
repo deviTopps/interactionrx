@@ -10,14 +10,14 @@ export default function SessionTimeout() {
   const { session, signOut } = useAuth();
   const [showWarning, setShowWarning] = useState(false);
   const lastActivity = useRef(Date.now());
-  const warningTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const logoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetTimers = () => {
     lastActivity.current = Date.now();
     setShowWarning(false);
-    clearTimeout(warningTimer.current);
-    clearTimeout(logoutTimer.current);
+    if (warningTimer.current) clearTimeout(warningTimer.current);
+    if (logoutTimer.current) clearTimeout(logoutTimer.current);
 
     warningTimer.current = setTimeout(() => {
       setShowWarning(true);
@@ -40,8 +40,8 @@ export default function SessionTimeout() {
 
     return () => {
       events.forEach((e) => window.removeEventListener(e, onActivity));
-      clearTimeout(warningTimer.current);
-      clearTimeout(logoutTimer.current);
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+      if (logoutTimer.current) clearTimeout(logoutTimer.current);
     };
   }, [session, signOut]);
 
