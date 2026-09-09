@@ -272,16 +272,30 @@ export interface SessionInfo {
 }
 
 async function getAccessToken(): Promise<string> {
-  const { data: { session }, error } = await supabase.auth.getSession();
-
-  if (error || !session?.access_token) {
-    throw new Error('Not authenticated. Please sign in again.');
+  let session;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) {
+      throw new Error('Not authenticated. Please sign in again.');
+    }
+    session = data.session;
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Not authenticated. Please sign in again.') {
+      throw err;
+    }
+    throw new Error(
+      'Could not read your session. On the live site, set Supabase Auth Site URL to https://interactionrx.vercel.app and add it under Redirect URLs, then sign in again.',
+    );
   }
 
   const expiresAt = session.expires_at ?? 0;
   if (expiresAt * 1000 - Date.now() < 60_000) {
-    const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-    if (refreshed?.access_token) return refreshed.access_token;
+    try {
+      const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+      if (refreshed?.access_token) return refreshed.access_token;
+    } catch {
+      // Fall through to the existing token if refresh fails (common when Auth URLs are misconfigured).
+    }
   }
 
   return session.access_token;
@@ -303,7 +317,13 @@ async function apiRequest<T>(
         ...options.headers,
       },
     });
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : '';
+    if (detail === 'Failed to fetch' || detail.includes('NetworkError')) {
+      throw new Error(
+        'Could not reach the API (network error). If you are on the live site, confirm BACKEND_URL is set and the API project is deployed. Locally, run: cd backend && npm run dev',
+      );
+    }
     throw new Error(
       'Could not reach the API. Make sure the backend is running (cd backend && npm run dev).'
     );

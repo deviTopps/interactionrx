@@ -15,6 +15,21 @@ const HOP_BY_HOP = new Set([
   'upgrade',
   'host',
   'content-length',
+  // fetch() may already decode the body; forwarding these breaks the browser
+  'content-encoding',
+  // CORS is handled by the browser against this Next origin; don't forward upstream CORS
+  'access-control-allow-origin',
+  'access-control-allow-credentials',
+  'access-control-allow-headers',
+  'access-control-allow-methods',
+  'access-control-expose-headers',
+]);
+
+const STRIP_REQUEST = new Set([
+  ...HOP_BY_HOP,
+  'origin',
+  'referer',
+  'cookie',
 ]);
 
 function backendBaseUrl() {
@@ -28,7 +43,7 @@ async function proxy(request: NextRequest, path: string[]) {
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) {
+    if (!STRIP_REQUEST.has(key.toLowerCase())) {
       headers.set(key, value);
     }
   });
@@ -47,9 +62,12 @@ async function proxy(request: NextRequest, path: string[]) {
   try {
     upstream = await fetch(destination, init);
   } catch (error) {
-    console.error('API proxy error:', error);
+    console.error('API proxy error:', destination, error);
     return NextResponse.json(
-      { error: 'Backend unavailable. Check BACKEND_URL and that the API is deployed.' },
+      {
+        error: 'Backend unavailable. Check BACKEND_URL and that the API project is deployed.',
+        destination: backendBaseUrl(),
+      },
       { status: 502 },
     );
   }
@@ -61,7 +79,10 @@ async function proxy(request: NextRequest, path: string[]) {
     }
   });
 
-  return new NextResponse(upstream.body, {
+  // Buffer the body so content-encoding / length cannot desync with the stream.
+  const body = await upstream.arrayBuffer();
+
+  return new NextResponse(body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,
@@ -95,7 +116,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   return proxy(request, path);
 }
 
-export async function OPTIONS(request: NextRequest, context: RouteContext) {
-  const { path } = await context.params;
-  return proxy(request, path);
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    },
+  });
 }
